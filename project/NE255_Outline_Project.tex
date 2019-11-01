@@ -1,0 +1,54 @@
+\documentclass[a4paper]{article}
+
+%% Language and font encodings
+\usepackage[english]{babel}
+\usepackage[utf8x]{inputenc}
+\usepackage[T1]{fontenc}
+
+%% Sets page size and margins
+\usepackage[a4paper,top=0cm,bottom=0cm,left=1.8cm,right=1.8cm,marginparwidth=1cm]{geometry}
+
+%% Useful packages
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage[colorinlistoftodos]{todonotes}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+\title{NE 255 Project Proposal}
+\author{Vergari Lorenzo}
+
+\begin{document}
+\maketitle
+
+\section{Desired Outcome}
+The aim of the NE255 final project will be to build a transport-depletion sequence on the platform SCALE \cite{Scale}, apply it to a practical case and discuss methods and outcomes. Such practical case will consist in assessing the change in average fuel composition from  startup to discharge from a selected reactor type (PB-FHR) and to quantify decay heat and subcriticality margin of spent fuel. In order to perform such analysis, several steps and multiple modules of the platform SCALE will be required. 
+Provided an initial equilibrium composition as a known input, a transport calculation will be required to compute the multi-group cross sections and fluxes and to collapse them into a one-group structure. Such one-group cross sections and flux will be used as parameters in a depletion calculation to evaluate the fuel composition change due to irradiation. By setting an appropriate irradiation interval length, the depletion sequence will allow to compute the average fuel composition at discharge. Finally, having identified the geometry and materials of spent fuel storage systems, the subcriticality of the configuration will be verified through an additional transport calculation, and the decay heat evolution with time will be monitored through another depletion sequence.
+The report will include a description of the theoretical equations of each phase and of their connections. A particular focus will be dedicated to the depletion sequence and to the numerical approach used for its resolution.
+
+\section{Project Rationale}
+The proposed project touches several topics of interest:
+\begin{itemize}
+    \item From an engineering perspective, the project tackles a realistic nuclear problem, as it investigates a way to study if a given configuration for spent fuel canisters complies with safety requirements.
+    \item From a mathematical standpoint, the project shows how to manipulate parameters from a multidimensional equation (the transport equation) in order to use them for an equation of lower dimensionality (the Bateman equation).
+    \item From a numerical perspective, the project presents two methods for the solution of the Bateman equations, i.e. Chebyshev Rational Approximation Method (CRAM) and Hybrid Matrix Exponential methods (MATREX).
+\end{itemize}
+
+\section{Project Plan}
+The project will consist of the following steps, which will be documented in the final report:\\
+\\\textbf{Monte Carlo transport and generation of one-group parameters.}
+Write the input for a SCALE 3D Monte Carlo module (KENO) to perform a transport simulation for an equilibrium composition fuel cell.  The geometry and composition used for the simulation will be defined from \cite{Cisneros}. Discuss how multi-group cross sections and fluxes are manipulated to produce the one-group parameters to be used in the depletion equations.\\
+\\\textbf{Depletion calculation.}
+Write the input for SCALE depletion module (ORIGEN) to study depletion of fresh fuel, using one-group removal cross sections and average flux from previous step alongside decay data from nuclear libraries. Introduce the Bateman equation, describe solution methods (CRAM and MATREX) and discuss the outcomes on spent fuel composition.\\
+\\\textbf{Spent fuel analysis.}
+Define a test geometry for spent fuel storage. Write a code to convert the file for fuel composition produced by ORIGEN into a input file readable by SCALE 3D criticality safety (Monte Carlo) module. Write the input for the module and compute the subcriticality margin. Write the input for ORIGEN and study decay heat evolution with time.
+\begin{thebibliography}{}
+\bibitem{Scale}
+B. T. Rearden and M.A. Jessee.
+\textit{SCALE Code System, ORNL/TM-2005/39, Version 6.2.3.} 
+{Oak Ridge National Laboratory, Oak Ridge, Tennessee (2018).}
+\bibitem{Cisneros}
+A. Cisneros.
+\textit{Pebble Bed Reactors Design Optimization Methods and Their Application to the Pebble Bed Fluoride Salt Cooled High Temperature Reactor.}
+{University oF California, Berkeley (2013).}
+\end{thebibliography}
+\end{document}
