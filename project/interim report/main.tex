@@ -1,0 +1,247 @@
+\documentclass[a4paper,titlepage]{article}
+\usepackage[title,toc,titletoc]{appendix}
+\usepackage{titlesec}
+%% Language and font encodings
+\usepackage[american]{babel}
+\usepackage[utf8x]{inputenc}
+\usepackage[T1]{fontenc}
+
+%% Sets page size and margins
+\usepackage[a4paper,top=3cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+
+%% Useful packages
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage[colorinlistoftodos]{todonotes}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\usepackage{mathtools}		% matematica
+%
+\newcommand{\nth}{n\ensuremath{^{\text{th}}} }
+\newcommand{\ve}[1]{\ensuremath{\mathbf{#1}}}
+\newcommand{\Macro}{\ensuremath{\Sigma}}
+\newcommand{\rvec}{\ensuremath{\vec{r}}}
+\newcommand{\xvec}{\ensuremath{\vec{x}}}
+\newcommand{\nvec}{\ensuremath{\vec{N}}}
+\newcommand{\svec}{\ensuremath{\vec{S}}}
+\newcommand{\cvec}{\ensuremath{\vec{C}}}
+\newcommand{\omvec}{\ensuremath{\hat{\Omega}}}
+\newcommand{\vOmega}{\ensuremath{\hat{\Omega}}}
+
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+\usepackage{amsthm}		% matematica
+\usepackage{bm}
+\usepackage{physics}
+
+\usepackage[sorting=none]{biblatex}
+\bibliography{biblio} 
+
+\title{NE255 Project - Interim Report}
+\author{Vergari, Lorenzo}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+\label{S:0}
+In recent years, an increasing number of innovative nuclear reactor concepts have been proposed by universities and industries, inducing an increasingly larger effort in devising and performing simulations that can reliably forecast reactor physics, safety and operations. Simulations focused on studying the properties of the fuel and its behavior after irradiation are among those studies, and are particularly concerned with evaluating features such as reactivity, decay heat and radiation dose.
+Since these features will depend on the composition of fuel at reactor discharge and on the geometry of the systems where newly-spent fuel is stored, it is useful to develop a computational sequence capable of estimating fuel composition at reactor discharge, studying neutron transport in the spent fuel and evaluating the evolution of decay heat and dose with time.
+One of the aims of this NE255 final project is to tackle part of this task, by building a transport-depletion sequence on the platform SCALE \cite{rearden2016scale} for the PB-FHR fuel \cite{cisneros2013pebble} , quantifying its sub-criticality margin when extracted from reactor and assessing decay heat evolution.
+
+In order to perform such analyses, several steps and multiple modules of the platform SCALE will be required. 
+Provided an initial equilibrium composition as a known input, a transport calculation will be required to compute the multi-group cross sections and and to collapse them into a one-group structure. Such one-group cross sections will be used as parameters in a depletion calculation to evaluate the fuel composition change due to irradiation. Finally, having assuming the geometry and materials of spent fuel storage systems, the sub-criticality of the configuration will be verified through an additional transport calculation, and the decay heat evolution with time will be monitored through another depletion sequence.
+
+This report also aims at providing a description of the mathematical formulation of each phase and of how the phases are interconnected. With this regards, a particular focus will be dedicated to the depletion sequence. Indeed, in addition to introducing and defining the constitutive equations, as done for the other phases, the report will provide details on the methods and algorithms used for its resolution.
+
+This document stands as an interim report and is organized as follows.
+Section \ref{S:1} will introduce the mathematical modelling of each phase of the problem. Section \ref{S:2} will deep dive the depletion sequence and focus on its solution algorithms. Section \ref{S:3} will outline plans to completion and Section \ref{S:5} will include the conclusions to this report.
+\section{Mathematics}
+\label{S:1}
+The compositions of spent nuclear fuel and of fuel under irradiation in a reactor evolve as a result of nuclear reactions and radioactive decays. A model used to describe this evolution as a function of time was formulated by Rutherford in 1905 \cite{rutherford1905radio} and solved by Harry Bateman in 1908 \cite{bateman1908solution}. In this model, the compositions ${N_{i}}$ of each isotope are collected in the vector \textbf{\textit{N}}(t) and are evolved according to Equation \ref{Eq:1}.
+\begin{equation}
+    \frac{dN_{i}}{dt}=\sum_{j\neq i}^{N_{isotopes}}(I_{ij}\lambda_j+f_{ij}\sigma_j\Phi)N_i(t)-(\lambda_i+\sigma_i\Phi)N_i(t) + S_i(t)
+    \label{Eq:1}
+\end{equation}
+Here, $\lambda_{i}$ is the decay constant of nuclide i, $I_{ij}$ is the fractional yield of nuclide i from decay of nuclide j, $\sigma_i$ is the spectrum-averaged removal cross section for nuclide i, $f_{ij}$ is the fractional yield of nuclide i from neutron-induced removal of nuclide j, $\Phi$ is the one speed scalar flux and $S_i$ is a time-dependent source.
+
+The Bateman equation, can be visualized as a balance to the concentration of the nuclides. Source terms are represented by the decay and reactions of other nuclides having the production of nuclide j as one of their branches. On the other side, decay and induced reactions on nuclide j act as loss terms in the balance.
+
+Selected parameters of the Bateman equation, such as decay constants and decay branching ratios, can be retrieved from nuclear libraries. However, other parameters, such as removal cross sections and reaction branching ratios, depend on the neutron spectrum of the system under study.
+
+Indeed, as the spectrum is influenced by core composition, the cross sections and reaction fractional yields in the Bateman equation would not be constant parameters, but would be depending on the flux, which in turn depends on the concentrations \textit{$N_i$}, making the equation non-linear.
+
+One strategy to preserve the linearity of the equation is to adopt for the cross sections equilibrium values, i.e. values that are representative for all the irradiation history, with a space- and time-averaged neutron spectrum. With this scope in mind, let's consider the energy dependent transport equation.
+
+\begin{centering}
+\begin{equation}
+    \begin{split}
+&\frac{1}{v}\frac{\partial \psi}{\partial t}(\rvec,E,\omvec,t) + {\omvec\cdot  \nabla \psi(\rvec,E,\omvec,t)} + {\Sigma_t(\rvec,E,N(t))\psi(\rvec,E,\omvec,t) } = \\& {\int_0^{\infty}\int_{4\pi} \Sigma_s(\rvec, E'\rightarrow E,\omvec'\rightarrow\omvec,N(t)) \psi(\rvec,E',\omvec',t)d\omvec'dE'} \\&+ {\frac{\chi_p(E)}{4\pi}\int_0^{\infty} \int_{4\pi}\nu(E')\Sigma_f(\rvec,N(t),E') \psi(\rvec,E',\omvec',t)d\omvec'dE'}
+\\&+ {S(\rvec, E, \omvec,t)}.
+\end{split}
+\end{equation}
+\end{centering}
+Here, in addition to the cross sections $\Sigma$, $\psi$ is the angular flux, $\omvec$ is the unit direction vector, $v$ and $E$ are the neutron velocity and energy, $\chi_p$ and $\nu$ are the fission energy spectrum and yield and $S$ is an external source term. In the equation, the cross sections $\Sigma$ can be decomposed as $\Sigma=N(t,\rvec)\sigma(E)$, where $\sigma$ is the microscopic cross sections and $N$ is the density. 
+
+As the microscopic cross section is a function of the neutron energy, one can write:
+\begin{equation}
+    \sigma=\frac{\int_0^T \int_V \int_E \sigma(E)\Phi(\rvec,E,t)}{\int_0^T \int_V \int_E \Phi(\rvec,E,t)}
+\end{equation}
+where \textit{[0,T]} is the irradiation time and V the system volume.
+
+Thus, in order to compute the average microscopic cross section to be used in the Bateman equation, one should perform a time-dependent transport simulation covering the whole irradiation time. Alternatively, one can resort to the integral mean value theorem, and express this denominator  as the space- , time- and energy- averaged scalar flux $\Phi_{STE}$ multiplied by the phase space volume $V T E$. Therefore, if the time averaged composition is known, one could consider a time-independent transport equation using such time averaged compositions, as those would lead to a time averaged neutron flux. 
+As a result, a depletion problem can be modelled as a two step sequence:
+\begin{enumerate}
+    \item Time-independent transport equation with equilibrium compositions to define the energy-averaged cross sections;
+    \item Time evolution of the composition vector with the Bateman equation.
+\end{enumerate}
+As the main focus of this report is the study of the depletion sequence, a discussion of the discretization strategy and of the solving algorithms for step 1 is left to other references. Interested readers might consult \cite{lewis1984computational} and \cite{bell1970nuclear}.
+For our purpose, it is sufficient to introduce the one-group cross sections to be used in the Bateman equation for each nuclide as \cite{kotlyar2015one}:
+\begin{equation}
+    \sigma_i=\frac{\sum_g\sigma_i^g\Phi_{eq}^g}{\sum_g\Phi_{eq}^g}
+\end{equation}
+Where the superscript g addresses the energy group and $\Phi_{eq}^g$ is the scalar flux of the g-th energy group considering an equilibrium core composition. An analogus expression defines the one-group fractional yields $f_{ij}$ .
+
+Having defined the energy and time averaged parameters that will appear in the depletion sequence, let us consider the second step of the sequence, described by $N_{isotopes}$ Eq. \ref{Eq:1} (one for each nuclide). These equations constitute a system of linear ODEs in time which can be written as:
+\begin{equation}
+    \frac{d\nvec}{dt}=\textbf{A}\nvec(t)+\svec(t)
+    \label{eq:ode}
+\end{equation}
+Here, $\textbf{A}$ represents the transition matrix, whose matrix element $A_{ij}$ defined as in Eq. \ref{eq:next} and $\svec$ is a source vector. 
+\begin{equation}
+    A_{ij}\doteqdot 
+\begin{cases}
+    l_{ij}\lambda_i+f_{ij}\sigma_i\Phi_{eq},& \text{if } i\neq j\\
+    -\lambda_i -\sigma_i\Phi_{eq},              & \text{otherwise}
+\end{cases}
+\label{eq:next}
+\end{equation}
+The source term is non-zero in case of an external feed, like in a molten salt reactor. For all other cases, including the FHR test case that will be described in this report, the term is null, and will therefore be neglected in the following sections.
+\section{Methods and Algorithms}
+\label{S:2}
+The ODE system of Eq. \ref{eq:ode} in absence of a source term, has an analytical solution in the form of a matrix exponential:
+\begin{equation}
+    \nvec(t)=e^{\textbf{A}t}\nvec(0)
+    \label{eq:sys}
+\end{equation}
+\begin{equation}
+   e ^{\textbf{A}t}\doteqdot\textbf{I}+\textbf{A}t+\frac{(\textbf{A}t)^2}{2}+...=\sum_{k=0}^\infty\frac{(\textbf{A}t)^k}{k!}
+    \label{eq:Matrex}
+\end{equation}
+The algorithm that leads to the solution of the Bateman equation using the exponential matrix of Eq. \ref{eq:Matrex} is named MATREX. An alternative method to MATREX is CRAM (Chebyshev Rational Approximation Method), an algorithm based on LU decomposition \cite{vondy1962development}\cite{pusa2010computing}\cite{isotalo2011comparison}.
+\subsection{MATREX}
+Solving the Bateman equation by simply computing the exponential matrix as in Eq. \ref{eq:Matrex} would require storage of the entire transition matrix $\textbf{A}$. However, for an accurate analysis, many thousands of nuclides needs to be considered, with significant demands for memory storage. A recursive relation has therefore been defined to provide an alternative of lower computational cost. To describe this alternative, let's replace Eq. \ref{eq:Matrex} in Eq. \ref{eq:sys} and write the scalar equation for the i-th nuclide, expanding the inner products and the powers of \textbf{A}:
+\begin{equation}
+\begin{split}
+    N_i(t)=&N_i(0)+t\sum_j AijN_j(0)+\frac{t}{2}\sum_k\left[A_{ik}t\sum_jA_{kj}N_j(0)\right]\\&+\frac{t}{3}\sum_m\left\{A_{im}\frac{t}{2}t\sum_k\left[A_{mk}t\sum_jA_{kj}N_j(0)\right]\right\}+...
+\end{split}
+\end{equation}
+Here, $N_i$ is computed as a summation of a series of terms that arise from the multiplication of the transition matrix with the vector of concentration increments produced from the previous terms. In other words, by defining the \textit{step concentrations}:
+\begin{equation}
+    C^0_i=N_i(0), \quad C^1=t\sum_jA_{ij}C^0_j, \quad C^{n+1}=\frac{t}{n+1}\sum_jA_{ij}C_j^n, 
+\end{equation}
+the concentration of nuclide i can be written as
+\begin{equation}
+    N_i(t)=\sum_{n=0}^{n_{term}}C^n_i + \epsilon_{trunc}
+\end{equation}
+where $n_{term}$ is the number of terms kept in the summation and $\epsilon_{trunc}$ is the truncation error. Therefore, this strategy requires storage of only two vectors, $\cvec^n$ and $\cvec^{n+1}$, in addition to the current value of the solution.
+A simplified representation of the MATREX algorithm is provided in Appendix \ref{App:Matrex}. A more extensive description of how the algorithm is implemented in SCALE will be provided in the final report.
+\subsection{CRAM}
+The Chebyshev Rational Approximation Method approximates the generic exponential function $e^{x}$ by means of the rational function $\hat{r}_{k,l}=\frac{\hat{p}_{k}}{\hat{q}_{k}}$ that minimizes the largest absolute error (i.e. the infinity norm) on the negative real axis.
+\begin{equation}
+    \epsilon_{k,k}\doteqdot sup_{x\in\mathbb{R}^{-}}\left| \hat{r}_{k,k}(x) -e^{x}\right|
+    \label{eq:compl}
+\end{equation}
+In the specific case of the depletion equation, it has been shown that the exponential matrix can be defined as a contour integral in the complex plane $\mathbb{C}$ and that the eigenvalues of the matrix are confined to a region near the negative real axis \cite{pusa2013numerical} . The calculation of the exponential matrix can therefore be replaced by a calculation of a contour integral, which can be approximated with quadrature formulas \cite{pusa2011rational}. Such quadrature formulas can, in turn, be associated with rational functions, whose poles and residues correspond to the nodes and weights of the quadrature \cite{trefethen2006talbot}.
+As a result, our exponential matrix can be approximated with a rational fraction $\hat{r}_{k,k}$ that can be selected according to the criterion in Eq. \ref{eq:compl}.
+Moreover, the rational function can be expressed in terms of its limit at infinity $\alpha_0$, its poles $\theta_i$ (which come in conjugate pairs) and their corresponding residues $\alpha_i$ \cite{pusa2010computing}:
+\begin{equation}
+   \hat{r}_{k,k}(x)=\alpha_0+Re\left(\sum_{i=1}^{k/2} \frac{\alpha_i}{(x-\theta_i)}\right)
+\end{equation}
+ Thanks to the Carathèodory-Fejer theorem, poles and residues $\theta_i$ and $\alpha_i$ can be computed from the coefficients of the Chebyshev rational function, which have been reported in literature \cite{carpenter1984extended}, as performed in \cite{trefethen2006talbot}. From these, the concentration vector can be approximated as follows:
+\begin{equation}
+    \textbf{N}(t)=e^{\textbf{A}(t)}\textbf{N}(0)\approx\hat{r}_{k,k}(-\textbf{A}t)\textbf{N}(0)=\alpha_0\textbf{N}(0)-Re\left(\sum_{i=1}^{k/2} (\theta_i\textbf{I}+\textbf{A}t)^{-1}\alpha_i\textbf{N}(0)\right)
+\end{equation}
+As a result, the concentration vector can be calculated by solving k/2 linear systems. An efficient strategy for solving these systems consists in forming the depletion matrix \textbf{A} by indexing the nuclides in ascending order with respect to their mass number (so that non zero elements are concentrated around the diagonal), calculating the LU factorization of \textbf{A} \cite{tarjan1976graph} and performing a Gaussian factorization \cite{rose1978algorithmic}.
+A simplified representation of the algorithm is provided in Appendix \ref{App:Cram}.  A more extensive description of how the algorithm is implemented will be provided in the final report.
+\section{Plans for Completion}
+One of the objectives of the project is to apply the mathematical background described in the previous sections to a practical case study based on the FHR report \cite{cisneros2013pebble}. In order to do so, the following steps will be followed:
+\begin{enumerate}
+    \item Write an input for SCALE Monte Carlo module (KENO) to perform a time-independent transport simulation on an equilibrium FHR cell and retrieve the one-group cross sections and fractional yields
+    \item Write an input for SCALE depletion module (ORIGEN) to simulate irradiation using MATREX and CRAM. Compare and report results in terms of accuracy and run-time
+    \item Define a test geometry for spent fuel wet storage. Write an input for SCALE criticality module (CSAS-6) to ascertain subcritical conditions and use ORIGEN to simulate decay heat evolution. Compare the results obtained with MATREX and CRAM.\footnote{Might be different to previous case since only decay takes place in this step.}
+    \item Deep dive the algorithms used in ORIGEN for depletion calculations, describing their approximation error and discussing their appropriateness to the diverse problems. 
+\end{enumerate}
+\label{S:3}
+\section{Conclusion}
+\label{S:5}
+Aim of this interim report was to provide context and mathematical background to the Bateman equation and the fuel depletion sequence in general. After having introduced the scope of analysis in Section \ref{S:0}, Section \ref{S:1} has broken down the depletion sequence in two steps; a first step consisting in a transport simulation to compute the reaction cross section and a second step represented by the actual Bateman equation. It has been shown that the computation of the one-group cross section required by the latter can be performed via a time-independent transport simulation at equilibrium condition. The Bateman equation was subsequently defined, and two solution methods were presented in Section \ref{S:2}. The first of the two, MATREX, solves the exponential matrix by adding up \textit{step concentrations} computed iteratively. The second method, CRAM, exploits contour integration to solve the depletion equation by approximating the exponential fraction with a rational function.
+Finally, Section \ref{S:3} describes what future steps will be made and provides a preview of the content of the final report.
+
+\newpage
+\begin{appendices}
+\section{MATREX algorithm}
+\label{App:Matrex}
+\begin{algorithm}
+\caption{MATREX simplified algorithm}
+\begin{algorithmic}
+\STATE initialize values and vectors (composition vector, step concentration, etc.)
+\STATE $\cvec^0$=$\nvec(0)$
+\FOR{$i$ in nuclides}
+\FOR {$j$ in nuclides}
+\IF{$i$ $\neq$ $j$}
+\STATE\[A_{ij}=l_{ij}\lambda_i+f_{ij}\sigma_i\Phi_{eq}\]
+\ELSE 
+\STATE \[A_{ij}=-\lambda_i -\sigma_i\Phi_{eq}\]
+\ENDIF
+\ENDFOR
+\ENDFOR
+\FOR{\textit{t} in time}
+\WHILE{not converged}
+\FOR{$i$ in nuclides}
+\FOR{$j$ in nuclides}
+\STATE\[\cvec^{n+1}_i=\cvec^{n+1}_i+\frac{t}{n+1}A_{ij}\cvec_j^n\]
+\ENDFOR
+\ENDFOR
+\STATE check for step composition convergence
+\ENDWHILE 
+\STATE $\nvec(t)$=$\cvec^n$
+\ENDFOR
+
+\end{algorithmic}
+\end{algorithm}
+\newpage
+\section{CRAM algorithm}
+\label{App:Cram}
+\begin{algorithm}
+\caption{CRAM simplified algorithm}
+\begin{algorithmic}
+\STATE initialize values and vectors (composition vector, step concentration, etc.)
+\FOR{$i$ in nuclides}
+\FOR {$j$ in nuclides}
+\IF{$i$ $\neq$ $j$}
+\STATE\[A_{ij}=l_{ij}\lambda_i+f_{ij}\sigma_i\Phi_{eq}\]
+\ELSE 
+\STATE \[A_{ij}=-\lambda_i -\sigma_i\Phi_{eq}\]
+\ENDIF
+\ENDFOR
+\ENDFOR
+\STATE Define order of Chebyshev rational fraction K based on required tolerance \cite{trefethen2006talbot}
+\FOR{\textit{t} in time}
+\STATE Compute $\hat{r}_{K,K}$ order 1,2, ..., \textit{K/2} poles $a_k$ and residues $\theta_k$ from Chebyshev coefficients using a polynomial root finder \cite{trefethen2006talbot}.
+\STATE Initialize $\nvec(t)=a_0\nvec(0)$
+\WHILE{k < K/2}
+\STATE Build $\tilde{\textbf{A}}=\textbf{A}t+\theta_k \textbf{I}$
+\STATE Solve the linear system $\tilde{\textbf{A}}\xvec=a_i \nvec(0)$ \footnotemark
+\STATE Initialize $\nvec(t)=\nvec(t)-Re(\xvec)$
+\ENDWHILE
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+\footnotetext{LU factorization and Gaussian elimination algorithms not included here. Interested readers might consult \cite{tarjan1976graph} and \cite{rose1978algorithmic}}
+\end{appendices}
+
+\newpage
+\printbibliography
+\end{document}
